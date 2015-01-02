@@ -11,15 +11,50 @@ def user_logged(func):
     return wrapper
 
 
+class UserRight:
+
+    class RightsChangingNotPossibleException(Exception):
+        def __init__(self):
+            super().__init__('Rights changing not possible')
+
+    def __init__(self, layer):
+        self.current_layer = self.start_layer = layer
+
+    def change_rights(self, layer):
+        if self.current_layer >= layer:
+            self.current_layer = layer
+        else:
+            raise UserRight.RightsChangingNotPossibleException()
+
+    def rights_to_defolt(self):
+        self.current_layer = self.start_layer
+
+    def __eq__(self, other):
+        return self.current_layer == other
+
+    def __le__(self, other):
+        return self.current_layer <= other
+
+    def __ge__(self, other):
+        return self.current_layer >= other
+
+
 class AccessSystem:
-    __ACCESS_DICT = {
-        'first': [1, 2, 3],
-        'second': [2, 3, 5],
-        'third': [7, 7, 7],
-        'fourth': [3, 6, 2],
-        'fifth': [1, 2, 3],
-        'sixth': [3, 6, 7],
-        'seventh': [1, 2, 4]
+    _ACCESS_RIGHTS = [
+        3,
+        2,
+        1,
+        0
+    ]
+
+    _USERS_RIGHTS = {
+        'first': UserRight(1),
+        'second': UserRight(3),
+        'third': UserRight(1),
+        'fourth': UserRight(2),
+        'fifth': UserRight(2),
+        'sixth': UserRight(0),
+        'seventh': UserRight(0)
     }
 
     class UserNotLoggedException(Exception):
@@ -42,8 +77,7 @@ class AccessSystem:
 
     @user_logged
     def can_read(self, file_num):
-        accessible_nums = [4, 5, 6, 7]
-        return self.__ACCESS_DICT[self._logged_user][file_num] in accessible_nums
+        return self._ACCESS_RIGHTS[file_num] <= self._USERS_RIGHTS[self._logged_user]
 
     def read(self, file_num):
         if self.can_read(file_num):
@@ -53,8 +87,7 @@ class AccessSystem:
 
     @user_logged
     def can_write(self, file_num):
-        accessible_nums = [2, 3, 6, 7]
-        return self.__ACCESS_DICT[self._logged_user][file_num] in accessible_nums
+        return self._ACCESS_RIGHTS[file_num] >= self._USERS_RIGHTS[self._logged_user]
 
     def write(self, file_num):
         if self.can_write(file_num):
@@ -63,29 +96,25 @@ class AccessSystem:
             raise AccessSystem.UserHaventRightsException()
 
     @user_logged
-    def can_grant(self, file_num):
-        accessible_nums = [1, 3, 5, 7]
-        return self.__ACCESS_DICT[self._logged_user][file_num] in accessible_nums
+    def change_rights(self, layer):
+        self._USERS_RIGHTS[self._logged_user].change_rights(layer)
 
-    def grant(self, file_num, granted_user, grant):
-        grants = {
-            'read': 4,
-            'write': 2,
-            'grant': 1
-        }
-        if not self.can_grant(file_num):
-            raise AccessSystem.UserHaventRightsException
-        if granted_user in self.__ACCESS_DICT.keys():
-            self.__ACCESS_DICT[granted_user][file_num] |= grants[grant]
-        else:
-            raise AccessSystem.UserNotRegisteredException()
+    @user_logged
+    def right_to_defolt(self):
+        self._USERS_RIGHTS[self._logged_user].rights_to_defolt()
 
     def logout(self):
         self._logged_user = None
 
     def identificate(self, name):
-        if name in self.__ACCESS_DICT.keys():
+        if name in self._USERS_RIGHTS.keys():
             self._logged_user = name
+            print('User rights:')
+            for user in self._USERS_RIGHTS.items():
+                print(user[0], ': ', user[1].current_layer)
+            print('Files layers: ')
+            for file, right in enumerate(self._ACCESS_RIGHTS):
+                print(file, ': ', right)
             return
         raise AccessSystem.UserNotRegisteredException
 
@@ -93,11 +122,11 @@ class AccessSystem:
 def main():
     access_system = AccessSystem()
     while True:
-        commands = ['read', 'write', 'identificate', 'grant', 'logout']
+        commands = ['read', 'write', 'identificate', 'change', 'logout', 'defolt']
         try:
             command = input('Input command >>> ').lower()
             command = command.split(' ')
-            if len(command) == 1 and command[0] == commands[-1]:
+            if len(command) == 1 and command[0] in commands[-2:]:
                 access_system.logout()
             elif len(command) < 2:
                 print('Bad command format.\n')
@@ -111,7 +140,7 @@ def main():
                 elif command[0] == commands[2]:
                     access_system.identificate(command[1])
                 elif command[0] == commands[3]:
-                    access_system.grant(int(command[1]), command[2], command[3])
+                    access_system.change_rights(int(command[1]))
         except Exception as exp:
             print(exp)
 
